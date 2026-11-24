@@ -293,6 +293,7 @@ class MockEndpointHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
         def chunk(delta: dict, finish: str | None) -> bytes:
+            """One SSE event: the chunk JSON framed as a data line."""
             payload = {
                 "id": "chatcmpl-mock", "object": "chat.completion.chunk",
                 "created": created, "model": model,
