@@ -8,6 +8,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
+from agentdesk.insight import insight_connect
 from agentdesk.insight.types import InsightContext
 from agentdesk.memory.crypto import MemoryEncryptedError
 from agentdesk.memory.profile import learned_lines, merged_topics
@@ -26,17 +27,35 @@ def build_context(
     profile (spec 016 section 6.5) is read here too: the context's topics
     become the stated ones then the learned ones, and the learned lines
     ride along under `learnedLines`. `now` defaults to the wall clock and
-    is injectable so a test can fix time."""
+    is injectable so a test can fix time. The desk's nameable things
+    (spec 023's connect step) ride along too: an empty tuple whenever
+    memory is absent, locked or sealed, so a context built directly in a
+    test behaves exactly as before."""
+    fixed_now = time.time() if now is None else now
     recall, note = _memory(server)
     agenda, agenda_note = _agenda(server)
     return InsightContext(
         preferences=_with_learned(server, preferences),
-        now=time.time() if now is None else now,
+        now=fixed_now,
         recall=recall,
         memory_note=note,
         agenda=agenda,
         agenda_note=agenda_note,
+        desk_names=insight_connect.build_index(_entities(server), agenda, fixed_now),
     )
+
+
+def _entities(server: Any) -> list:
+    """The memory store's entity summaries, or [] when there are none to
+    name. Every failure reads as no names: the connect step never takes
+    a card down over memory."""
+    memory = getattr(server, "memory", None)
+    if memory is None or bool(getattr(memory, "is_sealed", False)):
+        return []
+    try:
+        return list(memory.entities() or [])
+    except Exception:  # noqa: BLE001 - a reading never takes a card down
+        return []
 
 
 def _with_learned(server: Any, preferences: dict) -> dict:

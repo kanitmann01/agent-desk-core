@@ -34,6 +34,13 @@ class InsightContext:
     # about *this* meeting without reaching for the calendar itself.
     agenda: dict | None = None
     agenda_note: str = ""
+    # The desk's nameable things (spec 023's connect step): org and
+    # person entities with their names and fact counts, the agenda's
+    # event clause attached where it names one. Empty whenever memory is
+    # absent, locked or sealed, so a directly built context behaves as
+    # before. The connect matcher is a pure function of this and a
+    # card's rows; a family consults it and nothing else.
+    desk_names: tuple = ()
 
     @property
     def density(self) -> str:

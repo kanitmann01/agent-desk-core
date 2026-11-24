@@ -13,6 +13,7 @@ reading that cannot be computed is still a reading.
 
 from __future__ import annotations
 
+from agentdesk.insight import insight_connect
 from agentdesk.insight import press as press_module
 from agentdesk.insight import relations
 from agentdesk.insight.types import InsightContext, InsightReading
@@ -67,12 +68,26 @@ def derive(card: dict, payload: dict, context: InsightContext) -> InsightReading
     suggested = tuple(
         row for row in found[0].suggested if isinstance(row, int)
     )[:5]
+    # The connect step (spec 023): what the rows' names already sit in the
+    # desk's memory and agenda. A block on the card, never an element, and
+    # its receipts say so: no match leaves the reading exactly as it was.
+    line, notes = insight_connect.connect_line(_row_labels(table, tracker), context.desk_names)
     # The press carries the sentence it would explain, so a client never has
     # to re-derive which finding the button belonged to.
     press = dict(PRESS, text=found[0].text[: press_module.MAX_FINDING])
     # The table is the only thing this reading read, and the chart setting is
     # a receipt only once it is off auto: that is when it changed the sentence.
     used = ("chart",) if preference != "auto" else ()
+    if line:
+        return InsightReading(
+            elements=elements,
+            suggested=suggested,
+            press=press,
+            note=line,
+            used=used,
+            inputs=("rows", "memory", "calendar"),
+            memory_notes=notes,
+        )
     return InsightReading(
         elements=elements,
         suggested=suggested,
@@ -80,6 +95,24 @@ def derive(card: dict, payload: dict, context: InsightContext) -> InsightReading
         used=used,
         inputs=("rows",),
     )
+
+
+def _row_labels(table: relations.Table, tracker: dict) -> list[str]:
+    """Every row's label text, in the card's order: the tracker's chosen
+    label column when it chose one, else each row's first non-numeric
+    cell."""
+    label = _label_column(tracker)
+    column = None
+    if label:
+        column = next((c for c in table.columns
+                       if c.kind != "number" and c.name == label), None)
+    labels = []
+    for index, row in enumerate(table.rows):
+        if column is not None:
+            labels.append(row[column.index])
+            continue
+        labels.append(_row_label(table, index))
+    return labels
 
 
 def _note(message: str) -> InsightReading:
